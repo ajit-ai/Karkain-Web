@@ -1,0 +1,15 @@
+// Integration verification for the Karkain-Web public API.
+import web
+
+func main() {
+    let router = add_route(new_router(), "GET", "/health", "health_handler")
+    router = add_route(router, "POST", "/users", "create_user")
+
+    assert_eq(route_count(router), 2)
+    assert_eq(find_route(router, "GET", "/health"), "health_handler")
+    println(describe_route(router, "GET", "/health"))
+
+    let chain = use_middleware(use_middleware(new_chain(), "auth"), "log")
+    assert_eq(apply_chain(chain, find_route(router, "POST", "/users")), "auth>log>create_user")
+    println(apply_chain(chain, "create_user"))
+}

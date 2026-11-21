@@ -1,0 +1,7 @@
+name = "karkain-web"
+version = "0.1.0-dev"
+description = "HTTP route hosting and middleware primitives for Karkain v1.2.0"
+license = "MIT"
+targets = ["native"]
+
+[dependencies]

@@ -1,0 +1,131 @@
+// Karkain-Web - HTTP route hosting and middleware primitives.
+// Karkain Language v1.2.0 verified baseline (tag v1.2.0,
+// commit 77d70693e1e3134dac312a303bffafa7d50fa988).
+//
+// Scope boundary: v1.2.0 ships std.http primitives but no routing or
+// middleware layer. This framework supplies a portable route table and
+// middleware chain model. It does not bind sockets or replace std.http.
+//
+// Route table representation: triples [method, path, handler].
+// Middleware chain representation: an array of middleware names.
+// Arrays are values; mutating functions return the updated value.
+
+// new_router returns an empty route table.
+public func new_router() {
+    return []
+}
+
+// add_route registers a route, replacing an existing method/path pair.
+public func add_route(router, method, path, handler) {
+    let out = remove_route(router, method, path)
+    out = push(out, method)
+    out = push(out, path)
+    out = push(out, handler)
+    return out
+}
+
+// remove_route deletes the first matching method/path pair.
+public func remove_route(router, method, path) {
+    let out = []
+    let i = 0
+    while (i < len(router)) {
+        if router[i] == method {
+            if router[i + 1] == path {
+                i = i + 3
+            } else {
+                out = push(out, router[i])
+                out = push(out, router[i + 1])
+                out = push(out, router[i + 2])
+                i = i + 3
+            }
+        } else {
+            out = push(out, router[i])
+            out = push(out, router[i + 1])
+            out = push(out, router[i + 2])
+            i = i + 3
+        }
+    }
+    return out
+}
+
+// route_count returns the number of registered routes.
+public func route_count(router) {
+    return len(router) / 3
+}
+
+// has_route reports whether a method/path pair is registered.
+public func has_route(router, method, path) {
+    let i = 0
+    while (i < len(router)) {
+        if router[i] == method {
+            if router[i + 1] == path {
+                return true
+            }
+        }
+        i = i + 3
+    }
+    return false
+}
+
+// find_route returns the handler for a method/path pair or "".
+public func find_route(router, method, path) {
+    let i = 0
+    while (i < len(router)) {
+        if router[i] == method {
+            if router[i + 1] == path {
+                return router[i + 2]
+            }
+        }
+        i = i + 3
+    }
+    return ""
+}
+
+// method_allowed reports whether the path is registered for a method.
+public func method_allowed(router, path, method) {
+    return has_route(router, method, path)
+}
+
+// new_chain returns an empty middleware chain.
+public func new_chain() {
+    return []
+}
+
+// use_middleware appends a middleware name to a chain.
+public func use_middleware(chain, name) {
+    return push(chain, name)
+}
+
+// chain_size returns the number of middleware entries.
+public func chain_size(chain) {
+    return len(chain)
+}
+
+// middleware returns the nth middleware name or "".
+public func middleware(chain, n) {
+    if n < len(chain) {
+        return chain[n]
+    }
+    return ""
+}
+
+// apply_chain builds a documented pipeline string from a chain and a
+// terminal handler, e.g. "auth>log>handler".
+public func apply_chain(chain, handler) {
+    let out = ""
+    let i = 0
+    while (i < len(chain)) {
+        out = out + chain[i] + ">"
+        i = i + 1
+    }
+    return out + handler
+}
+
+// describe_route builds a one-line route diagnostic.
+public func describe_route(router, method, path) {
+    let h = find_route(router, method, path)
+    if h == "" {
+        return method + " " + path + " -> <missing>"
+    }
+    return method + " " + path + " -> " + h
+}

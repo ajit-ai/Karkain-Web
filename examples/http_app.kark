@@ -1,0 +1,14 @@
+// Karkain-Web runnable example: route table and middleware pipeline.
+import web
+
+func main() {
+    let router = new_router()
+    router = add_route(router, "GET", "/", "index")
+    router = add_route(router, "GET", "/health", "health")
+
+    let chain = use_middleware(use_middleware(new_chain(), "auth"), "logging")
+    println(describe_route(router, "GET", "/"))
+    println(describe_route(router, "GET", "/health"))
+    println(apply_chain(chain, find_route(router, "GET", "/")))
+    println("routes=" + str(route_count(router)))
+}

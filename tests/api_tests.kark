@@ -1,0 +1,68 @@
+// Native tests for Karkain-Web.
+
+func sample_router() {
+    let r = add_route(new_router(), "GET", "/health", "health_handler")
+    return add_route(r, "POST", "/users", "create_user")
+}
+
+func test_new_router() {
+    assert_eq(route_count(new_router()), 0)
+    assert_eq(find_route(new_router(), "GET", "/"), "")
+}
+
+func test_add_and_count() {
+    let r = sample_router()
+    assert_eq(route_count(r), 2)
+    assert(has_route(r, "GET", "/health"))
+}
+
+func test_find_route() {
+    let r = sample_router()
+    assert_eq(find_route(r, "GET", "/health"), "health_handler")
+    assert_eq(find_route(r, "POST", "/users"), "create_user")
+    assert_eq(find_route(r, "GET", "/users"), "")
+}
+
+func test_method_allowed() {
+    let r = sample_router()
+    assert(method_allowed(r, "/health", "GET"))
+    assert(method_allowed(r, "/health", "POST") == false)
+}
+
+func test_add_route_replaces() {
+    let r = add_route(sample_router(), "GET", "/health", "new_handler")
+    assert_eq(route_count(r), 2)
+    assert_eq(find_route(r, "GET", "/health"), "new_handler")
+}
+
+func test_remove_route() {
+    let r = remove_route(sample_router(), "GET", "/health")
+    assert_eq(route_count(r), 1)
+    assert(has_route(r, "GET", "/health") == false)
+    assert(has_route(r, "POST", "/users"))
+}
+
+func test_describe_route() {
+    let r = sample_router()
+    assert_eq(describe_route(r, "GET", "/health"), "GET /health -> health_handler")
+    assert_eq(describe_route(r, "DELETE", "/x"), "DELETE /x -> <missing>")
+}
+
+func test_new_chain() {
+    let c = new_chain()
+    assert_eq(chain_size(c), 0)
+    assert_eq(middleware(c, 0), "")
+}
+
+func test_use_middleware() {
+    let c = use_middleware(use_middleware(new_chain(), "auth"), "log")
+    assert_eq(chain_size(c), 2)
+    assert_eq(middleware(c, 0), "auth")
+    assert_eq(middleware(c, 1), "log")
+}
+
+func test_apply_chain() {
+    let c = use_middleware(use_middleware(new_chain(), "auth"), "log")
+    assert_eq(apply_chain(c, "handler"), "auth>log>handler")
+    assert_eq(apply_chain(new_chain(), "handler"), "handler")
+}

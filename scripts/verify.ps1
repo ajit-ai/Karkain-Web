@@ -34,7 +34,7 @@ try {
     $out = Invoke-Karkain @('test', $combined); $code = $LASTEXITCODE
     Write-Output "TEST native: exit=$code"; Write-Output $out
     if ($code -ne 0) { throw 'native tests failed' }
-    if ($out -notlike '*10 tests, 10 passed, 0 failed*') { throw 'native test summary mismatch' }
+    if ($out -notlike '*19 tests, 19 passed, 0 failed*') { throw 'native test summary mismatch' }
 
     $verify = Join-Path $repo 'src\verify.kark'
     $out = Invoke-Karkain @('run', $verify); $code = $LASTEXITCODE
@@ -54,6 +54,16 @@ try {
     $out = Invoke-Karkain @('run', (Join-Path $exDir 'http_app.kark')); $code = $LASTEXITCODE
     Write-Output "RUN example: exit=$code"; Write-Output $out
     if ($code -ne 0) { throw 'example failed' }    if ($out -notlike '*routes=2*') { throw 'example check missing' }
+    $advDir = Join-Path $tmp 'advanced'
+    New-Item -ItemType Directory -Path $advDir | Out-Null
+    Copy-Item -LiteralPath $module -Destination (Join-Path $advDir 'web.kark')
+    Copy-Item -LiteralPath (Join-Path $repo 'examples\http_engine.kark') -Destination (Join-Path $advDir 'http_engine.kark')
+    $out = Invoke-Karkain @('run', (Join-Path $advDir 'http_engine.kark')); $code = $LASTEXITCODE
+    Write-Output "RUN advanced example: exit=$code"; Write-Output $out
+    if ($code -ne 0) { throw 'advanced example failed' }
+    if ($out -notlike '*handler=get_user*') { throw 'advanced route output missing' }
+    if ($out -notlike '*query=true*') { throw 'advanced query output missing' }
+
     Write-Output 'VERIFY: ALL GATES PASSED'
 }
 finally {

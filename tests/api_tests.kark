@@ -66,3 +66,85 @@ func test_apply_chain() {
     assert_eq(apply_chain(c, "handler"), "auth>log>handler")
     assert_eq(apply_chain(new_chain(), "handler"), "handler")
 }
+
+// --- Phase 2 regression ---
+
+func test_phase1_regression() {
+    let r = add_route(new_router(), "GET", "/x", "h")
+    assert_eq(route_count(r), 1)
+    assert_eq(find_route(r, "GET", "/x"), "h")
+    assert(method_allowed(r, "/x", "GET"))
+}
+
+// --- Phase 2 additions ---
+
+func test_status_and_response() {
+    assert_eq(status_text(200), "OK")
+    assert_eq(status_text(404), "Not Found")
+    assert(is_success(200))
+    assert(is_success(404) == false)
+    let r = new_response(201, "created", "application/json")
+    assert_eq(response_status(r), 201)
+    assert_eq(response_body(r), "created")
+    assert_eq(content_type(r), "application/json")
+}
+
+func test_error_responses() {
+    let nf = not_found_response()
+    assert_eq(response_status(nf), 404)
+    let na = method_not_allowed_response()
+    assert_eq(response_status(na), 405)
+}
+
+func test_headers() {
+    let h = set_header(set_header(new_headers(), "Content-Type", "text/plain"), "X-One", "1")
+    assert_eq(header_count(h), 2)
+    assert_eq(header_get(h, "X-One", ""), "1")
+    assert_eq(header_get(h, "missing", "fallback"), "fallback")
+    let r = set_header(h, "X-One", "2")
+    assert_eq(header_count(r), 2)
+    assert_eq(header_get(r, "X-One", ""), "2")
+}
+
+func test_header_validation() {
+    assert(valid_header_name("Content-Type"))
+    assert(valid_header_name("") == false)
+    assert(valid_header_name("bad name") == false)
+    assert(valid_header_name("bad:name") == false)
+}
+
+func test_request_model() {
+    let req = new_request("GET", "/health", "")
+    assert_eq(request_method(req), "GET")
+    assert_eq(request_path(req), "/health")
+    assert_eq(request_body(req), "")
+    assert(validate_request(req))
+    assert(validate_request(new_request("", "/x", "")) == false)
+    assert(validate_request(new_request("GET", "x", "")) == false)
+}
+
+func test_query_helpers() {
+    let p = "/search?q=abc&page=2"
+    assert_eq(query_count(p), 2)
+    assert(has_query(p, "q"))
+    assert(has_query(p, "page"))
+    assert(has_query(p, "missing") == false)
+    assert_eq(query_count("/search"), 0)
+}
+
+func test_parameterized_route() {
+    let r = add_route(new_router(), "GET", "/users/{id}", "get_user")
+    assert_eq(match_route(r, "GET", "/users/42"), "get_user")
+    assert_eq(match_route(r, "GET", "/orders/42"), "")
+    assert_eq(match_route(r, "POST", "/users/42"), "")
+}
+
+func test_route_groups_and_context() {
+    let g = group_add_route(group_add_route(new_route_group("api"), "GET", "/a", "ha"), "POST", "/b", "hb")
+    assert_eq(group_route_count(g), 2)
+    let ctx = context_set(context_set(new_context("GET", "/a"), "user", "u1"), "trace", "t1")
+    assert_eq(context_get(ctx, "user", ""), "u1")
+    assert_eq(context_get(ctx, "none", "x"), "x")
+    assert(chain_terminates(use_middleware(new_chain(), "terminate")))
+    assert(chain_terminates(new_chain()) == false)
+}

@@ -1,0 +1,19 @@
+// Karkain-Web Phase 2 example: transport-neutral HTTP engine.
+import web
+
+func main() {
+    let router = add_route(new_router(), "GET", "/users/{id}", "get_user")
+    router = add_route(router, "POST", "/users", "create_user")
+
+    let req = new_request("GET", "/users/42?full=1", "")
+    println("valid=" + str(validate_request(req)))
+    println("handler=" + match_route(router, request_method(req), "/users/42"))
+
+    let h = set_header(new_headers(), "Content-Type", "application/json")
+    println("ctype=" + header_get(h, "Content-Type", ""))
+
+    let res = new_response(200, "ok", "text/plain")
+    println(describe_route(router, "GET", "/users/{id}"))
+    println("success=" + str(is_success(response_status(res))))
+    println("query=" + str(has_query(request_path(req), "full")))
+}

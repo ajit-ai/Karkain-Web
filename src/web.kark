@@ -129,3 +129,258 @@ public func describe_route(router, method, path) {
     }
     return method + " " + path + " -> " + h
 }
+
+// ---------------------------------------------------------------------------
+// Phase 2 additions: transport-neutral HTTP engine. No socket, HTTP server,
+// TLS or byte builtin exists in the verified v1.2.0 subset, so transport
+// execution is BLOCKED; the engine below is complete and testable in-process.
+
+// status_text maps common HTTP status codes to reason phrases.
+public func status_text(code) {
+    if code == 200 { return "OK" }
+    if code == 201 { return "Created" }
+    if code == 204 { return "No Content" }
+    if code == 400 { return "Bad Request" }
+    if code == 401 { return "Unauthorized" }
+    if code == 403 { return "Forbidden" }
+    if code == 404 { return "Not Found" }
+    if code == 405 { return "Method Not Allowed" }
+    if code == 500 { return "Internal Server Error" }
+    return "Unknown"
+}
+
+// is_success reports whether a status code is in the 2xx range.
+public func is_success(code) {
+    if code < 200 { return false }
+    if code > 299 { return false }
+    return true
+}
+
+// new_headers creates an empty header store.
+public func new_headers() {
+    return []
+}
+
+// valid_header_name rejects empty names and names containing ':' or ' '.
+public func valid_header_name(name) {
+    if len(name) == 0 { return false }
+    if contains(name, ":") { return false }
+    if contains(name, " ") { return false }
+    return true
+}
+
+// set_header adds or replaces a header value.
+public func set_header(headers, name, value) {
+    let out = []
+    out = push(out, name)
+    out = push(out, value)
+    let i = 0
+    while (i < len(headers)) {
+        if headers[i] == name {
+            i = i + 2
+        } else {
+            out = push(out, headers[i])
+            out = push(out, headers[i + 1])
+            i = i + 2
+        }
+    }
+    return out
+}
+
+// header_get returns a header value or a fallback.
+public func header_get(headers, name, fallback) {
+    let i = 0
+    while (i < len(headers)) {
+        if headers[i] == name {
+            return headers[i + 1]
+        }
+        i = i + 2
+    }
+    return fallback
+}
+
+// header_count returns the number of headers.
+public func header_count(headers) {
+    return len(headers) / 2
+}
+
+// new_request creates a request triple [method, path, body].
+public func new_request(method, path, body) {
+    let r = []
+    r = push(r, method)
+    r = push(r, path)
+    r = push(r, body)
+    return r
+}
+
+// request_method returns the request method.
+public func request_method(request) { return request[0] }
+
+// request_path returns the request path.
+public func request_path(request) { return request[1] }
+
+// request_body returns the request body.
+public func request_body(request) { return request[2] }
+
+// validate_request checks method presence and absolute path form.
+public func validate_request(request) {
+    if len(request_method(request)) == 0 { return false }
+    if len(request_path(request)) == 0 { return false }
+    if request_path(request)[0] != "/" { return false }
+    return true
+}
+
+// new_response creates a response triple [status, body, content_type].
+public func new_response(code, body, content_type) {
+    let r = []
+    r = push(r, code)
+    r = push(r, body)
+    r = push(r, content_type)
+    return r
+}
+
+// response_status returns the response status code.
+public func response_status(response) { return response[0] }
+
+// response_body returns the response body.
+public func response_body(response) { return response[1] }
+
+// content_type returns the response content type.
+public func content_type(response) { return response[2] }
+
+// not_found_response builds a standard 404 response.
+public func not_found_response() {
+    return new_response(404, "not found", "text/plain")
+}
+
+// method_not_allowed_response builds a standard 405 response.
+public func method_not_allowed_response() {
+    return new_response(405, "method not allowed", "text/plain")
+}
+
+// query_count counts query parameters in a path.
+public func query_count(path) {
+    let n = 0
+    let i = 0
+    while (i < len(path)) {
+        if path[i] == "&" { n = n + 1 }
+        i = i + 1
+    }
+    if contains(path, "?") { return n + 1 }
+    return 0
+}
+
+// has_query reports whether a key appears in the query string.
+public func has_query(path, key) {
+    if contains(path, "?" + key + "=") { return true }
+    if contains(path, "&" + key + "=") { return true }
+    return false
+}
+
+// match_route finds a handler using exact or single "{...}" pattern matching.
+public func match_route(router, method, path) {
+    let exact = find_route(router, method, path)
+    if exact != "" { return exact }
+    let i = 0
+    while (i < len(router)) {
+        if router[i] == method {
+            let pattern = router[i + 1]
+            if contains(pattern, "{") {
+                let open = 0
+                let close = 0
+                let j = 0
+                while (j < len(pattern)) {
+                    if pattern[j] == "{" { open = j }
+                    if pattern[j] == "}" { close = j }
+                    j = j + 1
+                }
+                if close > open {
+                    let prefix = true
+                    let k = 0
+                    while (k < open) {
+                        if k >= len(path) { prefix = false }
+                        else {
+                            if path[k] != pattern[k] { prefix = false }
+                        }
+                        k = k + 1
+                    }
+                    let suffix = true
+                    let t = 0
+                    while (t < len(pattern) - close - 1) {
+                        let pi = close + 1 + t
+                        let qi = len(path) - (len(pattern) - close - 1) + t
+                        if qi < 0 { suffix = false }
+                        else {
+                            if path[qi] != pattern[pi] { suffix = false }
+                        }
+                        t = t + 1
+                    }
+                    if prefix {
+                        if suffix {
+                            return router[i + 2]
+                        }
+                    }
+                }
+            }
+        }
+        i = i + 3
+    }
+    return ""
+}
+
+// new_route_group creates a named route group.
+public func new_route_group(name) {
+    let g = []
+    g = push(g, name)
+    return g
+}
+
+// group_add_route appends a route to a group.
+public func group_add_route(group, method, path, handler) {
+    let out = group
+    out = push(out, method)
+    out = push(out, path)
+    out = push(out, handler)
+    return out
+}
+
+// group_route_count returns the number of routes in a group.
+public func group_route_count(group) {
+    return (len(group) - 1) / 3
+}
+
+// chain_terminates reports whether a middleware chain contains a terminator.
+public func chain_terminates(chain) {
+    let i = 0
+    while (i < len(chain)) {
+        if chain[i] == "terminate" { return true }
+        i = i + 1
+    }
+    return false
+}
+
+// new_context creates a request context with a method and path.
+public func new_context(method, path) {
+    let c = []
+    c = push(c, method)
+    c = push(c, path)
+    return c
+}
+
+// context_set adds or replaces a context value.
+public func context_set(context, key, value) {
+    let out = context
+    out = push(out, key)
+    out = push(out, value)
+    return out
+}
+
+// context_get returns a context value or a fallback.
+public func context_get(context, key, fallback) {
+    let i = 2
+    while (i < len(context)) {
+        if context[i] == key { return context[i + 1] }
+        i = i + 2
+    }
+    return fallback
+}
